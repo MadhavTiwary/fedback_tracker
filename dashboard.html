@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEA MASTER - Layer Feedback Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: #333;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            color: #1e3c72;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header img {
+            width: 100px;
+            height: auto;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        input[type="text"] {
+            padding: 10px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            width: 300px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            animation: fadeIn 0.5s ease-out;
+            position: relative;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+
+        .stat-card div:last-child {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        /* Status chart visualization */
+        .status-chart {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e3c72;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .chart-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 150px;
+            padding: 10px;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 10px;
+        }
+
+        .chart-bar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            max-width: 80px;
+            margin: 0 5px;
+        }
+
+        .bar {
+            width: 100%;
+            min-height: 20px;
+            background: linear-gradient(to top, #667eea, #764ba2);
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s ease;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .bar:hover {
+            opacity: 0.8;
+            transform: scaleY(1.05);
+        }
+
+        .bar-value {
+            position: absolute;
+            top: -25px;
+            width: 100%;
+            text-align: center;
+            font-weight: 700;
+            color: #1e3c72;
+            font-size: 0.9rem;
+        }
+
+        .bar-label {
+            margin-top: 8px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #666;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .bar.status-open {
+            background: linear-gradient(to top, #3498db, #5dade2);
+        }
+
+        .bar.status-resolve {
+            background: linear-gradient(to top, #27ae60, #52be80);
+        }
+
+        .bar.status-hold {
+            background: linear-gradient(to top, #e74c3c, #ec7063);
+        }
+
+        .bar.status-pending {
+            background: linear-gradient(to top, #f39c12, #f5b041);
+        }
+
+        .bar.status-completed {
+            background: linear-gradient(to top, #27ae60, #52be80);
+        }
+
+        .bar.status-rejected {
+            background: linear-gradient(to top, #e74c3c, #ec7063);
+        }
+
+        .bar.status-inprogress {
+            background: linear-gradient(to top, #9b59b6, #bb8fce);
+        }
+
+        .filter-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-panel h3 {
+            margin-bottom: 15px;
+            color: #1e3c72;
+            font-size: 1.2rem;
+        }
+
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        .filter-group {
+            margin-bottom: 10px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .filter-group select, 
+        .filter-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .filter-group select:focus, 
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .table-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            overflow: auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            animation: slideUp 0.5s ease-out;
+            max-height: 600px;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+            font-size: 11px;
+        }
+
+        tbody tr {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.01);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-buttons button {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+            width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            color: #1e3c72;
+            font-size: 1.5rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #666;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0f0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input[readonly],
+        .form-group textarea[readonly] {
+            background-color: #f5f5f5;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0f0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transform: translateX(400px);
+            transition: transform 0.3s ease-out;
+            z-index: 2000;
+        }
+
+        a {
+            color: #667eea;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .clickable-link {
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .clickable-link:hover {
+            color: #764ba2;
+        }
+
+        .view-mode {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .view-mode h3 {
+            margin-bottom: 15px;
+            color: #1e3c72;
+        }
+
+        .view-mode .data-display {
+            display: grid;
+            gap: 15px;
+        }
+
+        .view-mode .data-item {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            align-items: start;
+        }
+
+        .view-mode .data-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .view-mode .data-value {
+            word-break: break-word;
+        }
+
+        .admin-only {
+            display: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-rejected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-inprogress {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .view-mode .data-item {
+                grid-template-columns: 1fr;
+            }
+            
+            .table-container {
+                max-height: 400px;
+            }
+            
+            .filter-controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            input[type="text"] {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 SEA MASTER - Layer Feedback Tracker</h1>
+            <img 
+                src="https://th.bing.com/th/id/R.e7b9c51d08d56a5b39f7c8a8d4c82d1c?rik=sf6WpzmhZ89Q6A&riu=http%3a%2f%2fforum.mappls.com%2fuploads%2fdefault%2foriginal%2f1X%2f86b6560c8d8137741b6b955fd9838a03e9af5308.png&ehk=tdH5AJ44f95OX4S6rI8OEArNM0rbcG0NiEAZLL91exk%3d&risl=&pid=ImgRaw&r=0" 
+                alt="Mappls MapmyIndia Logo"
+            />
+            <div class="controls">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept=".json,.csv">
+                    <label for="fileInput" class="file-input-label">📁 Upload JSON/CSV</label>
+                </div>
+                <input type="text" id="searchInput" placeholder="🔍 Search data...">
+                <button onclick="addNewItem()" class="btn-success admin-only">➕ Add New Item</button>
+                <button onclick="exportData()" class="btn-primary">💾 Export JSON</button>
+                <button onclick="loadDataFromPath()" class="btn-primary">🔄 Reload Data</button>
+                <button onclick="toggleFilterPanel()" class="btn-primary">🔍 Show Filters</button>
+            </div>
+            <div style="margin-top: 15px; font-size: 14px; color: #666;">
+                <span id="autoLoadStatus">Auto-loading from: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">./data.json</code></span>
+                <span id="lastUpdate" style="margin-left: 20px;"></span>
+                <div style="margin-top: 10px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; color: #155724;">
+                    <strong>✅ Auto-Save Enabled:</strong> All changes are automatically saved.
+                </div>
+                <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 5px; color: #1565c0;">
+                    <strong>🌐 Admin: Madhav Tiwary </strong>
+                    <span id="adminStatus">Not Logged In</span>
+                    <button onclick="adminLogin()" id="adminLoginBtn" class="btn-primary" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">Login</button>
+                    <button onclick="adminLogout()" id="adminLogoutBtn" class="btn-danger" style="margin-left: 10px; padding: 5px 10px; font-size: 12px; display: none;">Logout</button>
+                    <span id="currentUserDisplay" style="margin-left: 20px; font-weight: normal;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel" id="filterPanel" style="display: none;">
+            <h3>🔍 Filter Data</h3>
+            <div class="filter-controls" id="filterControls">
+                <!-- Filter controls will be generated dynamically -->
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="applyFilters()" class="btn-primary">Apply Filters</button>
+                <button onclick="resetFilters()" class="btn-danger">Reset Filters</button>
+                <button onclick="toggleFilterPanel()" class="btn-primary">Hide Filters</button>
+            </div>
+        </div>
+        
+        <!-- Status Chart Visualization -->
+        <div class="status-chart" id="statusChart" style="display: none;">
+            <div class="chart-title">📊 Status Distribution</div>
+            <div class="chart-container" id="chartContainer"></div>
+        </div>
+
+        <div class="table-container">
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">View/Edit Item</h2>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            dataPath: './data.json',
+            autoReload: true,
+            reloadInterval: 5000,
+            autoSave: true,
+            saveEndpoint: '/save',
+            adminPassword: 'pakistanmc', // Change this in production!
+            editableByAll: ['Production_Team_Remark', 'Status'], // Fields editable by all users
+            statusColors: {
+                'Pending': 'status-pending',
+                'Completed': 'status-completed',
+                'Rejected': 'status-rejected',
+                'In Progress': 'status-inprogress'
+            }
+        };
+
+        let jsonData = [];
+        let filteredData = [];
+        let editingIndex = -1;
+        let isEditing = false;
+        let currentViewMode = 'view';
+        let activeFilters = {};
+        let currentSearchTerm = '';
+        let isUserInteracting = false;
+        let lastDataUpdate = null;
+        let isAdmin = false;
+        let currentUser = ''; // ADDED: Track current user
+
+        // Get user identifier function - ADDED
+        function getUserIdentifier() {
+            // Always ask for user name
+            let userId = prompt('Please enter your name:');
+            if (!userId || userId.trim() === '') {
+                userId = 'Anonymous';
+            }
+            userId = userId.trim();
+            
+            localStorage.setItem('seaMasterUserId', userId);
+            currentUser = userId;
+            
+            // Update the display
+            const userDisplay = document.getElementById('currentUserDisplay');
+            if (userDisplay) {
+                userDisplay.textContent = `Current User: ${currentUser}`;
+            }
+            
+            return userId;
+        }
+
+        // Admin functions
+        function checkAdminStatus() {
+            isAdmin = localStorage.getItem('seaMasterAdmin') === 'true';
+            updateAdminUI();
+        }
+
+        function adminLogin() {
+            const password = prompt('Enter admin password:');
+            if (password === CONFIG.adminPassword) {
+                isAdmin = true;
+                localStorage.setItem('seaMasterAdmin', 'true');
+                updateAdminUI();
+                showNotification('Admin login successful');
+            } else {
+                showNotification('Invalid password', 'error');
+            }
+        }
+
+        function adminLogout() {
+            isAdmin = false;
+            localStorage.removeItem('seaMasterAdmin');
+            updateAdminUI();
+            showNotification('Admin logged out');
+        }
+
+        function updateAdminUI() {
+            document.getElementById('adminStatus').textContent = isAdmin ? 'Logged In' : 'Not Logged In';
+            document.getElementById('adminLoginBtn').style.display = isAdmin ? 'none' : 'inline-block';
+            document.getElementById('adminLogoutBtn').style.display = isAdmin ? 'inline-block' : 'none';
+            
+            // Show/hide admin-only elements
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? 'inline-block' : 'none';
+            });
+        }
+
+        // Save filters to localStorage
+        function saveFiltersToStorage() {
+            localStorage.setItem('seaMasterFilters', JSON.stringify(activeFilters));
+            localStorage.setItem('seaMasterSearch', currentSearchTerm);
+        }
+
+        // Load filters from localStorage
+        function loadFiltersFromStorage() {
+            const savedFilters = localStorage.getItem('seaMasterFilters');
+            const savedSearch = localStorage.getItem('seaMasterSearch');
+            
+            if (savedFilters) {
+                activeFilters = JSON.parse(savedFilters);
+            }
+            
+            if (savedSearch) {
+                currentSearchTerm = savedSearch;
+                document.getElementById('searchInput').value = currentSearchTerm;
+            }
+            
+            return savedFilters || savedSearch;
+        }
+
+        // Apply saved filters to UI controls
+        function applySavedFiltersToUI() {
+            Object.entries(activeFilters).forEach(([key, value]) => {
+                const filterElement = document.getElementById(`filter-${key}`);
+                if (filterElement) {
+                    filterElement.value = value;
+                }
+            });
+        }
+
+        // Initialize filter panel
+        function initFilterPanel() {
+            if (jsonData.length === 0) return;
+            
+            const filterControls = document.getElementById('filterControls');
+            const sampleItem = jsonData[0];
+            const keys = Object.keys(sampleItem);
+            
+            // Clear existing controls
+            filterControls.innerHTML = '';
+            
+            keys.forEach(key => {
+                // Skip ID fields
+                if (key.toLowerCase().includes('id')) return;
+                
+                const filterGroup = document.createElement('div');
+                filterGroup.className = 'filter-group';
+                
+                const label = document.createElement('label');
+                label.htmlFor = `filter-${key}`;
+                label.textContent = key;
+                
+                const uniqueValues = [...new Set(jsonData.map(item => item[key]))]
+                    .filter(v => v !== undefined && v !== null)
+                    .sort();
+                
+                let control;
+                
+                if (uniqueValues.length <= 10 && uniqueValues.length > 0) {
+                    // Create select dropdown for fields with few unique values
+                    control = document.createElement('select');
+                    control.id = `filter-${key}`;
+                    control.onchange = function() { updateFilter(key, this.value); };
+                    
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = '-- All --';
+                    control.appendChild(defaultOption);
+                    
+                    uniqueValues.forEach(value => {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = value;
+                        control.appendChild(option);
+                    });
+                } else {
+                    // Create text input for other fields
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.id = `filter-${key}`;
+                    control.placeholder = `Filter ${key}`;
+                    control.oninput = function() { updateFilter(key, this.value); };
+                }
+                
+                filterGroup.appendChild(label);
+                filterGroup.appendChild(control);
+                filterControls.appendChild(filterGroup);
+            });
+            
+            // Apply saved filters to UI if they exist
+            if (loadFiltersFromStorage()) {
+                applySavedFiltersToUI();
+                applySearchAndFilters(); // Apply the filters to the data
+            }
+            
+            document.getElementById('filterPanel').style.display = 'block';
+        }
+
+        // Toggle filter panel visibility
+        function toggleFilterPanel() {
+            const panel = document.getElementById('filterPanel');
+            if (panel.style.display === 'none') {
+                initFilterPanel();
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        // Update filter value with interaction tracking
+        function updateFilter(key, value) {
+            isUserInteracting = true;
+            if (value === '') {
+                delete activeFilters[key];
+            } else {
+                activeFilters[key] = value;
+            }
+            
+            setTimeout(() => {
+                isUserInteracting = false;
+            }, 1000);
+        }
+
+        // Apply both search and filters
+        function applySearchAndFilters() {
+            let tempData = [...jsonData];
+            
+            // Apply filters first
+            if (Object.keys(activeFilters).length > 0) {
+                tempData = tempData.filter(item => {
+                    return Object.entries(activeFilters).every(([key, value]) => {
+                        const itemValue = String(item[key] || '').toLowerCase();
+                        const filterValue = String(value).toLowerCase();
+                        return itemValue.includes(filterValue);
+                    });
+                });
+            }
+            
+            // Then apply search
+            if (currentSearchTerm) {
+                tempData = tempData.filter(item => {
+                    return Object.values(item).some(value => 
+                        String(value).toLowerCase().includes(currentSearchTerm)
+                    );
+                });
+            }
+            
+            filteredData = tempData;
+            renderTable();
+            updateStatusChart();
+        }
+
+        // Apply filters to data
+        function applyFilters() {
+            applySearchAndFilters();
+            saveFiltersToStorage();
+            showNotification(`Applied filters (${filteredData.length} items match)`);
+        }
+
+        // Reset all filters
+        function resetFilters() {
+            activeFilters = {};
+            currentSearchTerm = '';
+            localStorage.removeItem('seaMasterFilters');
+            localStorage.removeItem('seaMasterSearch');
+            
+            const inputs = document.querySelectorAll('.filter-panel input, .filter-panel select');
+            inputs.forEach(input => {
+                input.value = '';
+            });
+            
+            document.getElementById('searchInput').value = '';
+            
+            filteredData = [...jsonData];
+            renderDashboard();
+            showNotification('Filters and search reset');
+        }
+
+        // Auto-load data with smart refresh
+        async function loadDataFromPath() {
+            // Don't refresh if user is actively typing or interacting
+            if (isUserInteracting || document.getElementById('modal').style.display === 'block') {
+                return;
+            }
+            
+            try {
+                const response = await fetch(CONFIG.dataPath + '?t=' + Date.now()); // Cache buster
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Check if data actually changed
+                const newDataStr = JSON.stringify(data);
+                const oldDataStr = JSON.stringify(jsonData);
+                
+                if (newDataStr === oldDataStr) {
+                    return; // No changes, don't update
+                }
+                
+                jsonData = Array.isArray(data) ? data : [data];
+                lastDataUpdate = new Date();
+                
+                // Reapply search and filters after data load
+                applySearchAndFilters();
+                
+                // Initialize filter panel if data exists
+                if (jsonData.length > 0 && document.getElementById('filterControls').children.length === 0) {
+                    initFilterPanel();
+                }
+                
+                // Update last update time
+                const now = new Date();
+                document.getElementById('lastUpdate').textContent = `Last updated: ${now.toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                // Don't show error notification on every refresh attempt
+                if (!jsonData.length) {
+                    showNotification(`Error loading data from ${CONFIG.dataPath}`, 'error');
+                }
+            }
+        }
+
+        // Auto-reload functionality
+        let reloadInterval;
+        
+        function startAutoReload() {
+            if (CONFIG.autoReload && CONFIG.reloadInterval > 0) {
+                reloadInterval = setInterval(() => {
+                    loadDataFromPath();
+                }, CONFIG.reloadInterval);
+            }
+        }
+
+        function stopAutoReload() {
+            if (reloadInterval) {
+                clearInterval(reloadInterval);
+            }
+        }
+
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        let parsedData;
+                        if (file.name.endsWith('.csv')) {
+                            parsedData = parseCSV(e.target.result);
+                        } else {
+                            parsedData = JSON.parse(e.target.result);
+                        }
+                        
+                        if (!Array.isArray(parsedData)) {
+                            parsedData = [parsedData];
+                        }
+                        
+                        jsonData = parsedData;
+                        
+                        // Clear search and filters for new data
+                        activeFilters = {};
+                        currentSearchTerm = '';
+                        document.getElementById('searchInput').value = '';
+                        
+                        filteredData = [...jsonData];
+                        
+                        // Reinitialize filters with new data
+                        initFilterPanel();
+                        
+                        renderDashboard();
+                        showNotification('File loaded successfully!');
+                    } catch (error) {
+                        showNotification('Error parsing file!', 'error');
+                        console.error('Error:', error);
+                    }
+                };
+                
+                if (file.name.endsWith('.csv')) {
+                    reader.readAsText(file);
+                } else {
+                    reader.readAsText(file);
+                }
+            }
+        });
+
+        // Simple CSV parser
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                const values = lines[i].split(',');
+                const obj = {};
+                
+                for (let j = 0; j < headers.length; j++) {
+                    obj[headers[j]] = values[j] ? values[j].trim() : '';
+                }
+                
+                result.push(obj);
+            }
+            
+            return result;
+        }
+
+        // Search functionality with persistence
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            currentSearchTerm = e.target.value.toLowerCase();
+            isUserInteracting = true;
+            applySearchAndFilters();
+            saveFiltersToStorage();
+            
+            // Stop interaction flag after a delay
+            setTimeout(() => {
+                isUserInteracting = false;
+            }, 1000);
+        });
+
+        // Prevent form submission on enter key in search
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+
+        function renderDashboard() {
+            renderTable();
+            updateStatusChart();
+        }
+
+        function updateStats() {
+            // Calculate status counts if Status field exists
+            if (jsonData.length > 0 && 'Status' in jsonData[0]) {
+                const statusCounts = {};
+                jsonData.forEach(item => {
+                    const status = item.Status || 'Unknown';
+                    statusCounts[status] = (statusCounts[status] || 0) + 1;
+                });
+                
+                // Update chart visualization
+                updateStatusChart(statusCounts);
+            }
+        }
+
+        function updateStatusChart(statusCounts = null) {
+            const chartContainer = document.getElementById('chartContainer');
+            const statusChart = document.getElementById('statusChart');
+            
+            // If no statusCounts provided, calculate them
+            if (!statusCounts && jsonData.length > 0 && 'Status' in jsonData[0]) {
+                statusCounts = {};
+                jsonData.forEach(item => {
+                    const status = item.Status || 'Unknown';
+                    statusCounts[status] = (statusCounts[status] || 0) + 1;
+                });
+            }
+            
+            if (!statusCounts || Object.keys(statusCounts).length === 0) {
+                statusChart.style.display = 'none';
+                return;
+            }
+            
+            statusChart.style.display = 'block';
+            
+            // Find max value for scaling
+            const maxCount = Math.max(...Object.values(statusCounts));
+            
+            // Generate chart bars
+            let chartHTML = '';
+            Object.entries(statusCounts).forEach(([status, count]) => {
+                const percentage = (count / maxCount) * 100;
+                const statusClass = status.toLowerCase().replace(/\s+/g, '');
+                
+                chartHTML += `
+                    <div class="chart-bar">
+                        <div class="bar status-${statusClass}" 
+                             style="height: ${Math.max(percentage, 10)}%;"
+                             title="${status}: ${count} items">
+                            <div class="bar-value">${count}</div>
+                        </div>
+                        <div class="bar-label">${status}</div>
+                    </div>
+                `;
+            });
+            
+            chartContainer.innerHTML = chartHTML;
+        }
+
+        // Function to detect and convert URLs to clickable links
+        function makeLinksClickable(text) {
+            if (!text) return '';
+            
+            text = String(text);
+            const urlRegex = /(https?:\/\/[^\s<]+)|(www\.[^\s<]+)|(ftp:\/\/[^\s<]+)|([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/[^\s<]*)/g;
+            
+            return text.replace(urlRegex, function(match) {
+                let href = match;
+                if (!match.match(/^https?:\/\//)) {
+                    href = 'http://' + match;
+                }
+                return `<a href="${href}" target="_blank" class="clickable-link" onclick="event.stopPropagation()">${match}</a>`;
+            });
+        }
+
+        // Function to format status with badge
+        function formatStatus(status) {
+            if (!status) return '';
+            const statusClass = CONFIG.statusColors[status] || '';
+            return `<span class="status-badge ${statusClass}">${status}</span>`;
+        }
+
+        function renderTable() {
+            const container = document.getElementById('tableContainer');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No data to display</h2>
+                        <p>Upload a JSON/CSV file to get started or check your filters</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const keys = Object.keys(filteredData[0]);
+            
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            ${keys.map(key => `<th>${key}</th>`).join('')}
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            filteredData.forEach((item, index) => {
+                const originalIndex = jsonData.indexOf(item);
+                const hasEditableFields = CONFIG.editableByAll.some(field => field in item);
+                
+                tableHTML += `
+                    <tr onclick="viewItem(${originalIndex})" style="cursor: pointer;">
+                        ${keys.map(key => {
+                            const value = item[key] || '';
+                            let displayValue;
+                            
+                            if (key === 'Status') {
+                                displayValue = formatStatus(value);
+                            } else {
+                                displayValue = String(value).length > 50 ? 
+                                    String(value).substring(0, 50) + '...' : value;
+                                displayValue = makeLinksClickable(displayValue);
+                            }
+                            
+                            return `<td title="${String(value).replace(/"/g, '&quot;')}">${displayValue}</td>`;
+                        }).join('')}
+                        <td onclick="event.stopPropagation()">
+                            <div class="action-buttons">
+                                ${(isAdmin || hasEditableFields) ? 
+                                  `<button onclick="editItem(${originalIndex})" class="btn-primary">✏️ Edit</button>` : ''}
+                                ${isAdmin ? `<button onclick="deleteItem(${originalIndex})" class="btn-danger">🗑️ Delete</button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHTML;
+        }
+
+        function viewItem(index) {
+            editingIndex = index;
+            currentViewMode = 'view';
+            const item = jsonData[index];
+            showModal('View Item Details', item, 'view');
+        }
+
+        function editItem(index) {
+            editingIndex = index;
+            currentViewMode = 'edit';
+            const item = jsonData[index];
+            showModal('Edit Item', item, 'edit');
+        }
+
+        function deleteItem(index) {
+            if (!isAdmin) {
+                showNotification('Admin access required', 'error');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to delete this item?')) {
+                jsonData.splice(index, 1);
+                applySearchAndFilters();
+                renderDashboard();
+                showNotification('Item deleted successfully!');
+                
+                if (CONFIG.autoSave) {
+                    saveToFile();
+                }
+            }
+        }
+
+        function addNewItem() {
+            if (!isAdmin) {
+                showNotification('Admin access required', 'error');
+                return;
+            }
+            
+            editingIndex = -1;
+            currentViewMode = 'add';
+            
+            if (jsonData.length > 0) {
+                const template = {};
+                Object.keys(jsonData[0]).forEach(key => {
+                    template[key] = '';
+                });
+                showModal('Add New Item', template, 'add');
+            } else {
+                const template = {
+                    id: '',
+                    name: '',
+                    value: ''
+                };
+                showModal('Add New Item', template, 'add');
+            }
+        }
+
+        function showModal(title, data, mode) {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+            const modalFooter = document.getElementById('modalFooter');
+            
+            modalTitle.textContent = title;
+            isUserInteracting = true; // Prevent refresh while modal is open
+            
+            if (mode === 'view') {
+                let viewHTML = '<div class="view-mode"><h3>Item Details</h3><div class="data-display">';
+                Object.keys(data).forEach(key => {
+                    let displayValue = data[key] || '<em>No value</em>';
+                    
+                    if (key === 'Status') {
+                        displayValue = formatStatus(displayValue);
+                    } else {
+                        displayValue = makeLinksClickable(displayValue);
+                    }
+                    
+                    viewHTML += `
+                        <div class="data-item">
+                            <div class="data-label">${key}:</div>
+                            <div class="data-value">${displayValue}</div>
+                        </div>
+                    `;
+                });
+                viewHTML += '</div></div>';
+                modalBody.innerHTML = viewHTML;
+                
+                modalFooter.innerHTML = `
+                    ${(isAdmin || CONFIG.editableByAll.some(field => field in data)) ? 
+                      `<button onclick="editItem(${editingIndex})" class="btn-primary">✏️ Edit</button>` : ''}
+                    <button onclick="closeModal()" class="btn-danger">Close</button>
+                `;
+            } else {
+                let formHTML = '<div class="form-grid">';
+                Object.keys(data).forEach(key => {
+                    // Skip auto-generated fields in edit mode
+                    if (['Edited_By', 'Last_Edit_Date', 'Created_By', 'Created_Date'].includes(key)) {
+                        return;
+                    }
+                    
+                    const value = data[key] || '';
+                    const isLongText = String(value).length > 100;
+                    const isEditable = isAdmin || CONFIG.editableByAll.includes(key);
+                    
+                    if (isLongText) {
+                        formHTML += `
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="modal-${key}">${key}</label>
+                                <textarea id="modal-${key}" ${!isEditable ? 'readonly' : ''}>${value}</textarea>
+                            </div>
+                        `;
+                    } else {
+                        formHTML += `
+                            <div class="form-group">
+                                <label for="modal-${key}">${key}</label>
+                                <input type="text" id="modal-${key}" 
+                                       value="${String(value).replace(/"/g, '&quot;')}" 
+                                       ${!isEditable ? 'readonly' : ''} />
+                            </div>
+                        `;
+                    }
+                });
+                formHTML += '</div>';
+                modalBody.innerHTML = formHTML;
+                
+                modalFooter.innerHTML = `
+                    <button onclick="saveModalData()" class="btn-success">💾 Save</button>
+                    <button onclick="closeModal()" class="btn-danger">Cancel</button>
+                `;
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+            isUserInteracting = false; // Allow refresh again
+        }
+
+        // UPDATED saveModalData function with user tracking
+        function saveModalData() {
+            const modal = document.getElementById('modal');
+            const inputs = modal.querySelectorAll('input, textarea');
+            const newData = {};
+            let hasUnauthorizedEdit = false;
+            
+            // Get original item for comparison
+            const originalItem = editingIndex >= 0 ? jsonData[editingIndex] : {};
+            
+            // Check for unauthorized edits if not admin
+            if (!isAdmin) {
+                inputs.forEach(input => {
+                    const key = input.id.replace('modal-', '');
+                    if (!CONFIG.editableByAll.includes(key) && 
+                        String(input.value) !== String(originalItem[key])) {
+                        hasUnauthorizedEdit = true;
+                    }
+                });
+            }
+            
+            if (hasUnauthorizedEdit) {
+                showNotification('Only admins can edit these fields', 'error');
+                return;
+            }
+            
+            // Proceed with save
+            inputs.forEach(input => {
+                const key = input.id.replace('modal-', '');
+                newData[key] = input.value;
+            });
+            
+            // ADD EDIT TRACKING
+            newData['Edited_By'] = currentUser;
+            newData['Last_Edit_Date'] = new Date().toLocaleString();
+            
+            // If it's a new item, also track creation
+            if (currentViewMode === 'add') {
+                newData['Created_By'] = currentUser;
+                newData['Created_Date'] = new Date().toLocaleString();
+            } else {
+                // Preserve original creation info if editing
+                if (originalItem['Created_By']) {
+                    newData['Created_By'] = originalItem['Created_By'];
+                }
+                if (originalItem['Created_Date']) {
+                    newData['Created_Date'] = originalItem['Created_Date'];
+                }
+            }
+            
+            if (currentViewMode === 'edit') {
+                jsonData[editingIndex] = newData;
+                showNotification(`Item updated by ${currentUser}!`);
+            } else if (currentViewMode === 'add') {
+                jsonData.push(newData);
+                showNotification(`Item added by ${currentUser}!`);
+            }
+            
+            applySearchAndFilters();
+            renderDashboard();
+            closeModal();
+            
+            if (CONFIG.autoSave) {
+                saveToFile();
+            }
+        }
+
+        function exportData() {
+            if (jsonData.length === 0) {
+                showNotification('No data to export!', 'error');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(jsonData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+            const exportFileDefaultName = `sea_master_data_${timestamp}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            showNotification('Data exported successfully!');
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            
+            if (type === 'error') {
+                notification.style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
+            } else if (type === 'info') {
+                notification.style.background = 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+            } else {
+                notification.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+            }
+            
+            notification.style.transform = 'translateX(0)';
+            
+            setTimeout(() => {
+                notification.style.transform = 'translateX(400px)';
+            }, 3000);
+        }
+
+        // Auto-save functionality
+        async function saveToFile() {
+            try {
+                if (CONFIG.saveEndpoint) {
+                    const response = await fetch(CONFIG.saveEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(jsonData, null, 2)
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Changes saved to file');
+                    } else {
+                        throw new Error('Save failed');
+                    }
+                }
+            } catch (error) {
+                console.error('Auto-save error:', error);
+            }
+        }
+
+        // UPDATED window.onload to ask for user name
+        window.onload = async function() {
+            // Check admin status first
+            checkAdminStatus();
+            
+            // GET USER NAME - This will prompt for name
+            getUserIdentifier();
+            
+            // Show welcome message
+            showNotification(`Welcome ${currentUser}! Your edits will be tracked.`);
+            
+            // Load saved filters and search
+            loadFiltersFromStorage();
+            
+            // Load data
+            await loadDataFromPath();
+            
+            // Start auto-reload
+            startAutoReload();
+        };
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+        // Stop auto-reload when page is hidden, restart when visible
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoReload();
+            } else {
+                startAutoReload();
+                loadDataFromPath(); // Immediate refresh when returning
+            }
+        });
+
+        // Track when user leaves input fields
+        document.addEventListener('focusout', function(e) {
+            if (e.target.matches('input, textarea, select')) {
+                setTimeout(() => {
+                    isUserInteracting = false;
+                }, 500);
+            }
+        });
+
+        // Track when user enters input fields
+        document.addEventListener('focusin', function(e) {
+            if (e.target.matches('input, textarea, select')) {
+                isUserInteracting = true;
+            }
+        });
+    </script>
+</body>
+</html>
+            
