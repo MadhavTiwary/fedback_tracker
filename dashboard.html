@@ -1,4 +1,526 @@
-<!DOCTYPE html>
+<div class="container">
+        <div class="header">
+            <h1>📊 SEA MASTER - Layer Feedback Tracker <span id="connectionStatus" class="connection-status connection-loading">🔄 Connecting...</span></h1>
+            <img 
+                src="https://th.bing.com/th/id/R.e7b9c51d08d56a5b39f7c8a8d4c82d1c?rik=sf6WpzmhZ89Q6A&riu=http%3a%2f%2fforum.mappls.com%2fuploads%2fdefault%2foriginal%2f1X%2f86b6560c8d8137741b6b955fd9838a03e9af5308.png&ehk=tdH5AJ44f95OX4S6rI8OEArNM0rbcG0NiEAZLL91exk%3d&risl=&pid=ImgRaw&r=0" 
+                alt="Mappls MapmyIndia Logo"
+            />
+            <div class="controls">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept=".json,.csv">
+                    <label for="fileInput" class="file-input-label">📁 Upload JSON/CSV</label>
+                </div>
+                <input type="text" id="searchInput" placeholder="🔍 Search data...">
+                <button onclick="addNewItem()" class="btn-success admin-only">➕ Add New Item</button>
+                <button onclick="exportData()" class="btn-primary">💾 Export JSON</button>
+                <button onclick="loadDataFromPath()" class="btn-primary">🔄 Reload Data</button>
+                <button onclick="toggleFilterPanel()" class="btn-primary">🔍 Show Filters</button>
+                <button onclick="checkServerHealth()" class="btn-primary">🏥 Server Health</button>
+            </div>
+            <div style="margin-top: 15px; font-size: 14px; color: #666;">
+                <span id="autoLoadStatus">Auto-loading from: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">./data.json</code></span>
+                <span id="lastUpdate" style="margin-left: 20px;"></span>
+                <div style="margin-top: 10px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; color: #155724;">
+                    <strong>✅ Auto-Save Enabled:</strong> All changes are automatically saved to cloud storage.
+                </div>
+                <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 5px; color: #1565c0;">
+                    <strong>🌐 Admin: Madhav Tiwary </strong>
+                    <span id="adminStatus">Not Logged In</span>
+                    <button onclick="adminLogin()" id="adminLoginBtn" class="btn-primary" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">Login</button>
+                    <button onclick="adminLogout()" id="adminLogoutBtn" class="btn-danger" style="margin-left: 10px; padding: 5px 10px; font-size: 12px; display: none;">Logout</button>
+                    <span id="currentUserDisplay" style="margin-left: 20px; font-weight: normal;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel" id="filterPanel" style="display: none;">
+            <h3>🔍 Filter Data</h3>
+            <div class="filter-controls" id="filterControls">
+                <!-- Filter controls will be generated dynamically -->
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="applyFilters()" class="btn-primary">Apply Filters</button>
+                <button onclick="resetFilters()" class="btn-danger">Reset Filters</button>
+                <button onclick="toggleFilterPanel()" class="btn-primary">Hide Filters</button>
+            </div>
+        </div>
+        
+        <!-- Status Chart Visualization -->
+        <div class="status-chart" id="statusChart" style="display: none;">
+            <div class="chart-title">📊 Status Distribution</div>
+            <div class="chart-container" id="chartContainer"></div>
+        </div>
+
+        <div class="table-container">
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">View/Edit Item</h2>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            dataPath: './data.json',
+            apiBasePath: '/api',
+            autoReload: true,
+            reloadInterval: 5000,
+            autoSave: true,
+            saveEndpoint: '/api/save',
+            healthEndpoint: '/health',
+            adminPassword: 'pakistanmc',
+            editableByAll: ['Production_Team_Remark', 'Status'],
+            statusColors: {
+                'Pending': 'status-pending',
+                'Completed': 'status-completed',
+                'Rejected': 'status-rejected',
+                'In Progress': 'status-inprogress'
+            }
+        };
+
+        let jsonData = [];
+        let filteredData = [];
+        let editingIndex = -1;
+        let isEditing = false;
+        let currentViewMode = 'view';
+        let activeFilters = {};
+        let currentSearchTerm = '';
+        let isUserInteracting = false;
+        let lastDataUpdate = null;
+        let isAdmin = false;
+        let currentUser = '';
+        let isOnline = true;
+        let retryCount = 0;
+        let maxRetries = 3;
+
+        // Connection status management
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('connectionStatus');
+            switch(status) {
+                case 'online':
+                    statusElement.className = 'connection-status connection-online';
+                    statusElement.textContent = '🟢 Online';
+                    isOnline = true;
+                    retryCount = 0;
+                    break;
+                case 'offline':
+                    statusElement.className = 'connection-status connection-offline';
+                    statusElement.textContent = '🔴 Offline';
+                    isOnline = false;
+                    break;
+                case 'loading':
+                    statusElement.className = 'connection-status connection-loading';
+                    statusElement.textContent = '🔄 Connecting...';
+                    break;
+            }
+        }
+
+        // Enhanced error handling with retry logic
+        async function fetchWithRetry(url, options = {}, retries = maxRetries) {
+            try {
+                updateConnectionStatus('loading');
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                updateConnectionStatus('online');
+                return response;
+            } catch (error) {
+                console.error(`Fetch error (${retries} retries left):`, error);
+                
+                if (retries > 0) {
+                    retryCount++;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                    return fetchWithRetry(url, options, retries - 1);
+                } else {
+                    updateConnectionStatus('offline');
+                    throw error;
+                }
+            }
+        }
+
+        // Server health check
+        async function checkServerHealth() {
+            try {
+                const response = await fetchWithRetry(CONFIG.healthEndpoint);
+                const health = await response.json();
+                
+                showNotification(`Server Status: ${health.status} | Records: ${health.records} | Uptime: ${Math.round(health.uptime)}s`);
+                
+                // Update UI with health info
+                const lastUpdateSpan = document.getElementById('lastUpdate');
+                lastUpdateSpan.textContent = `Server: ${health.status} | Version: ${health.version} | Node: ${health.node}`;
+                
+            } catch (error) {
+                showNotification('Server health check failed', 'error');
+                console.error('Health check error:', error);
+            }
+        }
+
+        // Get user identifier function
+        function getUserIdentifier() {
+            let userId = localStorage.getItem('seaMasterUserId');
+            if (!userId) {
+                userId = prompt('Please enter your name:');
+                if (!userId || userId.trim() === '') {
+                    userId = 'Anonymous';
+                }
+                userId = userId.trim();
+                localStorage.setItem('seaMasterUserId', userId);
+            }
+            currentUser = userId;
+            
+            const userDisplay = document.getElementById('currentUserDisplay');
+            if (userDisplay) {
+                userDisplay.textContent = `Current User: ${currentUser}`;
+            }
+            
+            return userId;
+        }
+
+        // Admin functions
+        function checkAdminStatus() {
+            isAdmin = localStorage.getItem('seaMasterAdmin') === 'true';
+            updateAdminUI();
+        }
+
+        function adminLogin() {
+            const password = prompt('Enter admin password:');
+            if (password === CONFIG.adminPassword) {
+                isAdmin = true;
+                localStorage.setItem('seaMasterAdmin', 'true');
+                updateAdminUI();
+                showNotification('Admin login successful');
+            } else {
+                showNotification('Invalid password', 'error');
+            }
+        }
+
+        function adminLogout() {
+            isAdmin = false;
+            localStorage.removeItem('seaMasterAdmin');
+            updateAdminUI();
+            showNotification('Admin logged out');
+        }
+
+        function updateAdminUI() {
+            document.getElementById('adminStatus').textContent = isAdmin ? 'Logged In' : 'Not Logged In';
+            document.getElementById('adminLoginBtn').style.display = isAdmin ? 'none' : 'inline-block';
+            document.getElementById('adminLogoutBtn').style.display = isAdmin ? 'inline-block' : 'none';
+            
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? 'inline-block' : 'none';
+            });
+        }
+
+        // Enhanced data loading with API support
+        async function loadDataFromPath() {
+            if (isUserInteracting || document.getElementById('modal').style.display === 'block') {
+                return;
+            }
+            
+            try {
+                const response = await fetchWithRetry(CONFIG.dataPath + '?t=' + Date.now());
+                const data = await response.json();
+                
+                const newDataStr = JSON.stringify(data);
+                const oldDataStr = JSON.stringify(jsonData);
+                
+                if (newDataStr === oldDataStr) {
+                    return;
+                }
+                
+                jsonData = Array.isArray(data) ? data : [data];
+                lastDataUpdate = new Date();
+                
+                applySearchAndFilters();
+                
+                if (jsonData.length > 0 && document.getElementById('filterControls').children.length === 0) {
+                    initFilterPanel();
+                }
+                
+                const now = new Date();
+                document.getElementById('lastUpdate').textContent = `Last updated: ${now.toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                if (!jsonData.length) {
+                    showNotification(`Error loading data: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Enhanced save function with API support
+        async function saveToFile() {
+            try {
+                if (!isOnline) {
+                    showNotification('Cannot save - offline', 'error');
+                    return false;
+                }
+
+                const response = await fetchWithRetry(CONFIG.saveEndpoint, {
+                    method: 'POST',
+                    body: JSON.stringify(jsonData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ Changes saved to cloud storage');
+                    showNotification('Changes saved to cloud', 'info');
+                    return true;
+                } else {
+                    throw new Error(result.message || 'Save failed');
+                }
+            } catch (error) {
+                console.error('❌ Auto-save error:', error);
+                showNotification('Save failed - data stored locally', 'error');
+                return false;
+            }
+        }
+
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        let parsedData;
+                        if (file.name.endsWith('.csv')) {
+                            parsedData = parseCSV(e.target.result);
+                        } else {
+                            parsedData = JSON.parse(e.target.result);
+                        }
+                        
+                        if (!Array.isArray(parsedData)) {
+                            parsedData = [parsedData];
+                        }
+                        
+                        jsonData = parsedData;
+                        
+                        activeFilters = {};
+                        currentSearchTerm = '';
+                        document.getElementById('searchInput').value = '';
+                        
+                        filteredData = [...jsonData];
+                        
+                        initFilterPanel();
+                        renderDashboard();
+                        showNotification('File loaded successfully!');
+                        
+                        if (CONFIG.autoSave) {
+                            saveToFile();
+                        }
+                    } catch (error) {
+                        showNotification('Error parsing file!', 'error');
+                        console.error('Error:', error);
+                    }
+                };
+                
+                reader.readAsText(file);
+            }
+        });
+
+        // Simple CSV parser
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                const values = lines[i].split(',');
+                const obj = {};
+                
+                for (let j = 0; j < headers.length; j++) {
+                    obj[headers[j]] = values[j] ? values[j].trim() : '';
+                }
+                
+                result.push(obj);
+            }
+            
+            return result;
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            currentSearchTerm = e.target.value.toLowerCase();
+            isUserInteracting = true;
+            applySearchAndFilters();
+            saveFiltersToStorage();
+            
+            setTimeout(() => {
+                isUserInteracting = false;
+            }, 1000);
+        });
+
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+
+        // Save and load filters
+        function saveFiltersToStorage() {
+            localStorage.setItem('seaMasterFilters', JSON.stringify(activeFilters));
+            localStorage.setItem('seaMasterSearch', currentSearchTerm);
+        }
+
+        function loadFiltersFromStorage() {
+            const savedFilters = localStorage.getItem('seaMasterFilters');
+            const savedSearch = localStorage.getItem('seaMasterSearch');
+            
+            if (savedFilters) {
+                activeFilters = JSON.parse(savedFilters);
+            }
+            
+            if (savedSearch) {
+                currentSearchTerm = savedSearch;
+                document.getElementById('searchInput').value = currentSearchTerm;
+            }
+            
+            return savedFilters || savedSearch;
+        }
+
+        // Filter panel functions
+        function initFilterPanel() {
+            if (jsonData.length === 0) return;
+            
+            const filterControls = document.getElementById('filterControls');
+            const sampleItem = jsonData[0];
+            const keys = Object.keys(sampleItem);
+            
+            filterControls.innerHTML = '';
+            
+            keys.forEach(key => {
+                if (key.toLowerCase().includes('id')) return;
+                
+                const filterGroup = document.createElement('div');
+                filterGroup.className = 'filter-group';
+                
+                const label = document.createElement('label');
+                label.htmlFor = `filter-${key}`;
+                label.textContent = key;
+                
+                const uniqueValues = [...new Set(jsonData.map(item => item[key]))]
+                    .filter(v => v !== undefined && v !== null)
+                    .sort();
+                
+                let control;
+                
+                if (uniqueValues.length <= 10 && uniqueValues.length > 0) {
+                    control = document.createElement('select');
+                    control.id = `filter-${key}`;
+                    control.onchange = function() { updateFilter(key, this.value); };
+                    
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = '-- All --';
+                    control.appendChild(defaultOption);
+                    
+                    uniqueValues.forEach(value => {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = value;
+                        control.appendChild(option);
+                    });
+                } else {
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.id = `filter-${key}`;
+                    control.placeholder = `Filter ${key}`;
+                    control.oninput = function() { updateFilter(key, this.value); };
+                }
+                
+                filterGroup.appendChild(label);
+                filterGroup.appendChild(control);
+                filterControls.appendChild(filterGroup);
+            });
+            
+            if (loadFiltersFromStorage()) {
+                applySavedFiltersToUI();
+                applySearchAndFilters();
+            }
+            
+            document.getElementById('filterPanel').style.display = 'block';
+        }
+
+        function applySavedFiltersToUI() {
+            Object.entries(activeFilters).forEach(([key, value]) => {
+                const filterElement = document.getElementById(`filter-${key}`);
+                if (filterElement) {
+                    filterElement.value = value;
+                }
+            });
+        }
+
+        function toggleFilterPanel() {
+            const panel = document.getElementById('filterPanel');
+            if (panel.style.display === 'none') {
+                initFilterPanel();
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function updateFilter(key, value) {
+            isUserInteracting = true;
+            if (value === '') {
+                delete activeFilters[key];
+            } else {
+                activeFilters[key] = value;
+            }
+            
+            setTimeout(() => {
+                isUserInteracting = false;
+            }, 1000);
+        }
+
+        function applySearchAndFilters() {
+            let tempData = [...jsonData];
+            
+            if (Object.keys(activeFilters).length > 0) {
+                tempData = tempData.filter(item => {
+                    return Object.entries(activeFilters).every(([key, value]) => {
+                        const itemValue = String(item[key] || '').toLowerCase();
+                        const filterValue = String(value).toLowerCase();
+                        return itemValue.includes(filterValue);
+                    });
+                });
+            }
+            
+            if (currentSearchTerm) {
+                tempData = tempData.filter(item => {
+                    return Object.values(item).some(value => 
+                        String(value).toLowerCase().includes(currentSearchTerm)
+                    );
+                });
+            }
+            
+            filteredData = tempData;
+            renderTable();
+            updateStatusChart();<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -639,6 +1161,30 @@
             color: #004085;
         }
 
+        .connection-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .connection-online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .connection-offline {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .connection-loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
         @media (max-width: 768px) {
             .form-grid {
                 grid-template-columns: 1fr;
@@ -665,971 +1211,3 @@
                 width: 100%;
             }
         }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📊 SEA MASTER - Layer Feedback Tracker</h1>
-            <img 
-                src="https://th.bing.com/th/id/R.e7b9c51d08d56a5b39f7c8a8d4c82d1c?rik=sf6WpzmhZ89Q6A&riu=http%3a%2f%2fforum.mappls.com%2fuploads%2fdefault%2foriginal%2f1X%2f86b6560c8d8137741b6b955fd9838a03e9af5308.png&ehk=tdH5AJ44f95OX4S6rI8OEArNM0rbcG0NiEAZLL91exk%3d&risl=&pid=ImgRaw&r=0" 
-                alt="Mappls MapmyIndia Logo"
-            />
-            <div class="controls">
-                <div class="file-input-wrapper">
-                    <input type="file" id="fileInput" accept=".json,.csv">
-                    <label for="fileInput" class="file-input-label">📁 Upload JSON/CSV</label>
-                </div>
-                <input type="text" id="searchInput" placeholder="🔍 Search data...">
-                <button onclick="addNewItem()" class="btn-success admin-only">➕ Add New Item</button>
-                <button onclick="exportData()" class="btn-primary">💾 Export JSON</button>
-                <button onclick="loadDataFromPath()" class="btn-primary">🔄 Reload Data</button>
-                <button onclick="toggleFilterPanel()" class="btn-primary">🔍 Show Filters</button>
-            </div>
-            <div style="margin-top: 15px; font-size: 14px; color: #666;">
-                <span id="autoLoadStatus">Auto-loading from: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">./data.json</code></span>
-                <span id="lastUpdate" style="margin-left: 20px;"></span>
-                <div style="margin-top: 10px; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; color: #155724;">
-                    <strong>✅ Auto-Save Enabled:</strong> All changes are automatically saved.
-                </div>
-                <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 5px; color: #1565c0;">
-                    <strong>🌐 Admin: Madhav Tiwary </strong>
-                    <span id="adminStatus">Not Logged In</span>
-                    <button onclick="adminLogin()" id="adminLoginBtn" class="btn-primary" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">Login</button>
-                    <button onclick="adminLogout()" id="adminLogoutBtn" class="btn-danger" style="margin-left: 10px; padding: 5px 10px; font-size: 12px; display: none;">Logout</button>
-                    <span id="currentUserDisplay" style="margin-left: 20px; font-weight: normal;"></span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filter Panel -->
-        <div class="filter-panel" id="filterPanel" style="display: none;">
-            <h3>🔍 Filter Data</h3>
-            <div class="filter-controls" id="filterControls">
-                <!-- Filter controls will be generated dynamically -->
-            </div>
-            <div style="margin-top: 15px; display: flex; gap: 10px;">
-                <button onclick="applyFilters()" class="btn-primary">Apply Filters</button>
-                <button onclick="resetFilters()" class="btn-danger">Reset Filters</button>
-                <button onclick="toggleFilterPanel()" class="btn-primary">Hide Filters</button>
-            </div>
-        </div>
-        
-        <!-- Status Chart Visualization -->
-        <div class="status-chart" id="statusChart" style="display: none;">
-            <div class="chart-title">📊 Status Distribution</div>
-            <div class="chart-container" id="chartContainer"></div>
-        </div>
-
-        <div class="table-container">
-            <div id="tableContainer"></div>
-        </div>
-    </div>
-
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">View/Edit Item</h2>
-                <button class="close-btn" onclick="closeModal()">×</button>
-            </div>
-            <div id="modalBody"></div>
-            <div class="modal-footer" id="modalFooter"></div>
-        </div>
-    </div>
-
-    <div id="notification"></div>
-
-    <script>
-        // Configuration
-        const CONFIG = {
-            dataPath: './data.json',
-            autoReload: true,
-            reloadInterval: 5000,
-            autoSave: true,
-            saveEndpoint: '/save',
-            adminPassword: 'pakistanmc', // Change this in production!
-            editableByAll: ['Production_Team_Remark', 'Status'], // Fields editable by all users
-            statusColors: {
-                'Pending': 'status-pending',
-                'Completed': 'status-completed',
-                'Rejected': 'status-rejected',
-                'In Progress': 'status-inprogress'
-            }
-        };
-
-        let jsonData = [];
-        let filteredData = [];
-        let editingIndex = -1;
-        let isEditing = false;
-        let currentViewMode = 'view';
-        let activeFilters = {};
-        let currentSearchTerm = '';
-        let isUserInteracting = false;
-        let lastDataUpdate = null;
-        let isAdmin = false;
-        let currentUser = ''; // ADDED: Track current user
-
-        // Get user identifier function - ADDED
-        function getUserIdentifier() {
-            // Always ask for user name
-            let userId = prompt('Please enter your name:');
-            if (!userId || userId.trim() === '') {
-                userId = 'Anonymous';
-            }
-            userId = userId.trim();
-            
-            localStorage.setItem('seaMasterUserId', userId);
-            currentUser = userId;
-            
-            // Update the display
-            const userDisplay = document.getElementById('currentUserDisplay');
-            if (userDisplay) {
-                userDisplay.textContent = `Current User: ${currentUser}`;
-            }
-            
-            return userId;
-        }
-
-        // Admin functions
-        function checkAdminStatus() {
-            isAdmin = localStorage.getItem('seaMasterAdmin') === 'true';
-            updateAdminUI();
-        }
-
-        function adminLogin() {
-            const password = prompt('Enter admin password:');
-            if (password === CONFIG.adminPassword) {
-                isAdmin = true;
-                localStorage.setItem('seaMasterAdmin', 'true');
-                updateAdminUI();
-                showNotification('Admin login successful');
-            } else {
-                showNotification('Invalid password', 'error');
-            }
-        }
-
-        function adminLogout() {
-            isAdmin = false;
-            localStorage.removeItem('seaMasterAdmin');
-            updateAdminUI();
-            showNotification('Admin logged out');
-        }
-
-        function updateAdminUI() {
-            document.getElementById('adminStatus').textContent = isAdmin ? 'Logged In' : 'Not Logged In';
-            document.getElementById('adminLoginBtn').style.display = isAdmin ? 'none' : 'inline-block';
-            document.getElementById('adminLogoutBtn').style.display = isAdmin ? 'inline-block' : 'none';
-            
-            // Show/hide admin-only elements
-            document.querySelectorAll('.admin-only').forEach(el => {
-                el.style.display = isAdmin ? 'inline-block' : 'none';
-            });
-        }
-
-        // Save filters to localStorage
-        function saveFiltersToStorage() {
-            localStorage.setItem('seaMasterFilters', JSON.stringify(activeFilters));
-            localStorage.setItem('seaMasterSearch', currentSearchTerm);
-        }
-
-        // Load filters from localStorage
-        function loadFiltersFromStorage() {
-            const savedFilters = localStorage.getItem('seaMasterFilters');
-            const savedSearch = localStorage.getItem('seaMasterSearch');
-            
-            if (savedFilters) {
-                activeFilters = JSON.parse(savedFilters);
-            }
-            
-            if (savedSearch) {
-                currentSearchTerm = savedSearch;
-                document.getElementById('searchInput').value = currentSearchTerm;
-            }
-            
-            return savedFilters || savedSearch;
-        }
-
-        // Apply saved filters to UI controls
-        function applySavedFiltersToUI() {
-            Object.entries(activeFilters).forEach(([key, value]) => {
-                const filterElement = document.getElementById(`filter-${key}`);
-                if (filterElement) {
-                    filterElement.value = value;
-                }
-            });
-        }
-
-        // Initialize filter panel
-        function initFilterPanel() {
-            if (jsonData.length === 0) return;
-            
-            const filterControls = document.getElementById('filterControls');
-            const sampleItem = jsonData[0];
-            const keys = Object.keys(sampleItem);
-            
-            // Clear existing controls
-            filterControls.innerHTML = '';
-            
-            keys.forEach(key => {
-                // Skip ID fields
-                if (key.toLowerCase().includes('id')) return;
-                
-                const filterGroup = document.createElement('div');
-                filterGroup.className = 'filter-group';
-                
-                const label = document.createElement('label');
-                label.htmlFor = `filter-${key}`;
-                label.textContent = key;
-                
-                const uniqueValues = [...new Set(jsonData.map(item => item[key]))]
-                    .filter(v => v !== undefined && v !== null)
-                    .sort();
-                
-                let control;
-                
-                if (uniqueValues.length <= 10 && uniqueValues.length > 0) {
-                    // Create select dropdown for fields with few unique values
-                    control = document.createElement('select');
-                    control.id = `filter-${key}`;
-                    control.onchange = function() { updateFilter(key, this.value); };
-                    
-                    const defaultOption = document.createElement('option');
-                    defaultOption.value = '';
-                    defaultOption.textContent = '-- All --';
-                    control.appendChild(defaultOption);
-                    
-                    uniqueValues.forEach(value => {
-                        const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = value;
-                        control.appendChild(option);
-                    });
-                } else {
-                    // Create text input for other fields
-                    control = document.createElement('input');
-                    control.type = 'text';
-                    control.id = `filter-${key}`;
-                    control.placeholder = `Filter ${key}`;
-                    control.oninput = function() { updateFilter(key, this.value); };
-                }
-                
-                filterGroup.appendChild(label);
-                filterGroup.appendChild(control);
-                filterControls.appendChild(filterGroup);
-            });
-            
-            // Apply saved filters to UI if they exist
-            if (loadFiltersFromStorage()) {
-                applySavedFiltersToUI();
-                applySearchAndFilters(); // Apply the filters to the data
-            }
-            
-            document.getElementById('filterPanel').style.display = 'block';
-        }
-
-        // Toggle filter panel visibility
-        function toggleFilterPanel() {
-            const panel = document.getElementById('filterPanel');
-            if (panel.style.display === 'none') {
-                initFilterPanel();
-            } else {
-                panel.style.display = 'none';
-            }
-        }
-
-        // Update filter value with interaction tracking
-        function updateFilter(key, value) {
-            isUserInteracting = true;
-            if (value === '') {
-                delete activeFilters[key];
-            } else {
-                activeFilters[key] = value;
-            }
-            
-            setTimeout(() => {
-                isUserInteracting = false;
-            }, 1000);
-        }
-
-        // Apply both search and filters
-        function applySearchAndFilters() {
-            let tempData = [...jsonData];
-            
-            // Apply filters first
-            if (Object.keys(activeFilters).length > 0) {
-                tempData = tempData.filter(item => {
-                    return Object.entries(activeFilters).every(([key, value]) => {
-                        const itemValue = String(item[key] || '').toLowerCase();
-                        const filterValue = String(value).toLowerCase();
-                        return itemValue.includes(filterValue);
-                    });
-                });
-            }
-            
-            // Then apply search
-            if (currentSearchTerm) {
-                tempData = tempData.filter(item => {
-                    return Object.values(item).some(value => 
-                        String(value).toLowerCase().includes(currentSearchTerm)
-                    );
-                });
-            }
-            
-            filteredData = tempData;
-            renderTable();
-            updateStatusChart();
-        }
-
-        // Apply filters to data
-        function applyFilters() {
-            applySearchAndFilters();
-            saveFiltersToStorage();
-            showNotification(`Applied filters (${filteredData.length} items match)`);
-        }
-
-        // Reset all filters
-        function resetFilters() {
-            activeFilters = {};
-            currentSearchTerm = '';
-            localStorage.removeItem('seaMasterFilters');
-            localStorage.removeItem('seaMasterSearch');
-            
-            const inputs = document.querySelectorAll('.filter-panel input, .filter-panel select');
-            inputs.forEach(input => {
-                input.value = '';
-            });
-            
-            document.getElementById('searchInput').value = '';
-            
-            filteredData = [...jsonData];
-            renderDashboard();
-            showNotification('Filters and search reset');
-        }
-
-        // Auto-load data with smart refresh
-        async function loadDataFromPath() {
-            // Don't refresh if user is actively typing or interacting
-            if (isUserInteracting || document.getElementById('modal').style.display === 'block') {
-                return;
-            }
-            
-            try {
-                const response = await fetch(CONFIG.dataPath + '?t=' + Date.now()); // Cache buster
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                
-                // Check if data actually changed
-                const newDataStr = JSON.stringify(data);
-                const oldDataStr = JSON.stringify(jsonData);
-                
-                if (newDataStr === oldDataStr) {
-                    return; // No changes, don't update
-                }
-                
-                jsonData = Array.isArray(data) ? data : [data];
-                lastDataUpdate = new Date();
-                
-                // Reapply search and filters after data load
-                applySearchAndFilters();
-                
-                // Initialize filter panel if data exists
-                if (jsonData.length > 0 && document.getElementById('filterControls').children.length === 0) {
-                    initFilterPanel();
-                }
-                
-                // Update last update time
-                const now = new Date();
-                document.getElementById('lastUpdate').textContent = `Last updated: ${now.toLocaleTimeString()}`;
-            } catch (error) {
-                console.error('Error loading data:', error);
-                // Don't show error notification on every refresh attempt
-                if (!jsonData.length) {
-                    showNotification(`Error loading data from ${CONFIG.dataPath}`, 'error');
-                }
-            }
-        }
-
-        // Auto-reload functionality
-        let reloadInterval;
-        
-        function startAutoReload() {
-            if (CONFIG.autoReload && CONFIG.reloadInterval > 0) {
-                reloadInterval = setInterval(() => {
-                    loadDataFromPath();
-                }, CONFIG.reloadInterval);
-            }
-        }
-
-        function stopAutoReload() {
-            if (reloadInterval) {
-                clearInterval(reloadInterval);
-            }
-        }
-
-        // File input handler
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        let parsedData;
-                        if (file.name.endsWith('.csv')) {
-                            parsedData = parseCSV(e.target.result);
-                        } else {
-                            parsedData = JSON.parse(e.target.result);
-                        }
-                        
-                        if (!Array.isArray(parsedData)) {
-                            parsedData = [parsedData];
-                        }
-                        
-                        jsonData = parsedData;
-                        
-                        // Clear search and filters for new data
-                        activeFilters = {};
-                        currentSearchTerm = '';
-                        document.getElementById('searchInput').value = '';
-                        
-                        filteredData = [...jsonData];
-                        
-                        // Reinitialize filters with new data
-                        initFilterPanel();
-                        
-                        renderDashboard();
-                        showNotification('File loaded successfully!');
-                    } catch (error) {
-                        showNotification('Error parsing file!', 'error');
-                        console.error('Error:', error);
-                    }
-                };
-                
-                if (file.name.endsWith('.csv')) {
-                    reader.readAsText(file);
-                } else {
-                    reader.readAsText(file);
-                }
-            }
-        });
-
-        // Simple CSV parser
-        function parseCSV(csvText) {
-            const lines = csvText.split('\n');
-            const headers = lines[0].split(',').map(h => h.trim());
-            const result = [];
-            
-            for (let i = 1; i < lines.length; i++) {
-                if (!lines[i].trim()) continue;
-                
-                const values = lines[i].split(',');
-                const obj = {};
-                
-                for (let j = 0; j < headers.length; j++) {
-                    obj[headers[j]] = values[j] ? values[j].trim() : '';
-                }
-                
-                result.push(obj);
-            }
-            
-            return result;
-        }
-
-        // Search functionality with persistence
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            currentSearchTerm = e.target.value.toLowerCase();
-            isUserInteracting = true;
-            applySearchAndFilters();
-            saveFiltersToStorage();
-            
-            // Stop interaction flag after a delay
-            setTimeout(() => {
-                isUserInteracting = false;
-            }, 1000);
-        });
-
-        // Prevent form submission on enter key in search
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-            }
-        });
-
-        function renderDashboard() {
-            renderTable();
-            updateStatusChart();
-        }
-
-        function updateStats() {
-            // Calculate status counts if Status field exists
-            if (jsonData.length > 0 && 'Status' in jsonData[0]) {
-                const statusCounts = {};
-                jsonData.forEach(item => {
-                    const status = item.Status || 'Unknown';
-                    statusCounts[status] = (statusCounts[status] || 0) + 1;
-                });
-                
-                // Update chart visualization
-                updateStatusChart(statusCounts);
-            }
-        }
-
-        function updateStatusChart(statusCounts = null) {
-            const chartContainer = document.getElementById('chartContainer');
-            const statusChart = document.getElementById('statusChart');
-            
-            // If no statusCounts provided, calculate them
-            if (!statusCounts && jsonData.length > 0 && 'Status' in jsonData[0]) {
-                statusCounts = {};
-                jsonData.forEach(item => {
-                    const status = item.Status || 'Unknown';
-                    statusCounts[status] = (statusCounts[status] || 0) + 1;
-                });
-            }
-            
-            if (!statusCounts || Object.keys(statusCounts).length === 0) {
-                statusChart.style.display = 'none';
-                return;
-            }
-            
-            statusChart.style.display = 'block';
-            
-            // Find max value for scaling
-            const maxCount = Math.max(...Object.values(statusCounts));
-            
-            // Generate chart bars
-            let chartHTML = '';
-            Object.entries(statusCounts).forEach(([status, count]) => {
-                const percentage = (count / maxCount) * 100;
-                const statusClass = status.toLowerCase().replace(/\s+/g, '');
-                
-                chartHTML += `
-                    <div class="chart-bar">
-                        <div class="bar status-${statusClass}" 
-                             style="height: ${Math.max(percentage, 10)}%;"
-                             title="${status}: ${count} items">
-                            <div class="bar-value">${count}</div>
-                        </div>
-                        <div class="bar-label">${status}</div>
-                    </div>
-                `;
-            });
-            
-            chartContainer.innerHTML = chartHTML;
-        }
-
-        // Function to detect and convert URLs to clickable links
-        function makeLinksClickable(text) {
-            if (!text) return '';
-            
-            text = String(text);
-            const urlRegex = /(https?:\/\/[^\s<]+)|(www\.[^\s<]+)|(ftp:\/\/[^\s<]+)|([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/[^\s<]*)/g;
-            
-            return text.replace(urlRegex, function(match) {
-                let href = match;
-                if (!match.match(/^https?:\/\//)) {
-                    href = 'http://' + match;
-                }
-                return `<a href="${href}" target="_blank" class="clickable-link" onclick="event.stopPropagation()">${match}</a>`;
-            });
-        }
-
-        // Function to format status with badge
-        function formatStatus(status) {
-            if (!status) return '';
-            const statusClass = CONFIG.statusColors[status] || '';
-            return `<span class="status-badge ${statusClass}">${status}</span>`;
-        }
-
-        function renderTable() {
-            const container = document.getElementById('tableContainer');
-            
-            if (filteredData.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <h2>No data to display</h2>
-                        <p>Upload a JSON/CSV file to get started or check your filters</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const keys = Object.keys(filteredData[0]);
-            
-            let tableHTML = `
-                <table>
-                    <thead>
-                        <tr>
-                            ${keys.map(key => `<th>${key}</th>`).join('')}
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            filteredData.forEach((item, index) => {
-                const originalIndex = jsonData.indexOf(item);
-                const hasEditableFields = CONFIG.editableByAll.some(field => field in item);
-                
-                tableHTML += `
-                    <tr onclick="viewItem(${originalIndex})" style="cursor: pointer;">
-                        ${keys.map(key => {
-                            const value = item[key] || '';
-                            let displayValue;
-                            
-                            if (key === 'Status') {
-                                displayValue = formatStatus(value);
-                            } else {
-                                displayValue = String(value).length > 50 ? 
-                                    String(value).substring(0, 50) + '...' : value;
-                                displayValue = makeLinksClickable(displayValue);
-                            }
-                            
-                            return `<td title="${String(value).replace(/"/g, '&quot;')}">${displayValue}</td>`;
-                        }).join('')}
-                        <td onclick="event.stopPropagation()">
-                            <div class="action-buttons">
-                                ${(isAdmin || hasEditableFields) ? 
-                                  `<button onclick="editItem(${originalIndex})" class="btn-primary">✏️ Edit</button>` : ''}
-                                ${isAdmin ? `<button onclick="deleteItem(${originalIndex})" class="btn-danger">🗑️ Delete</button>` : ''}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = tableHTML;
-        }
-
-        function viewItem(index) {
-            editingIndex = index;
-            currentViewMode = 'view';
-            const item = jsonData[index];
-            showModal('View Item Details', item, 'view');
-        }
-
-        function editItem(index) {
-            editingIndex = index;
-            currentViewMode = 'edit';
-            const item = jsonData[index];
-            showModal('Edit Item', item, 'edit');
-        }
-
-        function deleteItem(index) {
-            if (!isAdmin) {
-                showNotification('Admin access required', 'error');
-                return;
-            }
-            
-            if (confirm('Are you sure you want to delete this item?')) {
-                jsonData.splice(index, 1);
-                applySearchAndFilters();
-                renderDashboard();
-                showNotification('Item deleted successfully!');
-                
-                if (CONFIG.autoSave) {
-                    saveToFile();
-                }
-            }
-        }
-
-        function addNewItem() {
-            if (!isAdmin) {
-                showNotification('Admin access required', 'error');
-                return;
-            }
-            
-            editingIndex = -1;
-            currentViewMode = 'add';
-            
-            if (jsonData.length > 0) {
-                const template = {};
-                Object.keys(jsonData[0]).forEach(key => {
-                    template[key] = '';
-                });
-                showModal('Add New Item', template, 'add');
-            } else {
-                const template = {
-                    id: '',
-                    name: '',
-                    value: ''
-                };
-                showModal('Add New Item', template, 'add');
-            }
-        }
-
-        function showModal(title, data, mode) {
-            const modal = document.getElementById('modal');
-            const modalTitle = document.getElementById('modalTitle');
-            const modalBody = document.getElementById('modalBody');
-            const modalFooter = document.getElementById('modalFooter');
-            
-            modalTitle.textContent = title;
-            isUserInteracting = true; // Prevent refresh while modal is open
-            
-            if (mode === 'view') {
-                let viewHTML = '<div class="view-mode"><h3>Item Details</h3><div class="data-display">';
-                Object.keys(data).forEach(key => {
-                    let displayValue = data[key] || '<em>No value</em>';
-                    
-                    if (key === 'Status') {
-                        displayValue = formatStatus(displayValue);
-                    } else {
-                        displayValue = makeLinksClickable(displayValue);
-                    }
-                    
-                    viewHTML += `
-                        <div class="data-item">
-                            <div class="data-label">${key}:</div>
-                            <div class="data-value">${displayValue}</div>
-                        </div>
-                    `;
-                });
-                viewHTML += '</div></div>';
-                modalBody.innerHTML = viewHTML;
-                
-                modalFooter.innerHTML = `
-                    ${(isAdmin || CONFIG.editableByAll.some(field => field in data)) ? 
-                      `<button onclick="editItem(${editingIndex})" class="btn-primary">✏️ Edit</button>` : ''}
-                    <button onclick="closeModal()" class="btn-danger">Close</button>
-                `;
-            } else {
-                let formHTML = '<div class="form-grid">';
-                Object.keys(data).forEach(key => {
-                    // Skip auto-generated fields in edit mode
-                    if (['Edited_By', 'Last_Edit_Date', 'Created_By', 'Created_Date'].includes(key)) {
-                        return;
-                    }
-                    
-                    const value = data[key] || '';
-                    const isLongText = String(value).length > 100;
-                    const isEditable = isAdmin || CONFIG.editableByAll.includes(key);
-                    
-                    if (isLongText) {
-                        formHTML += `
-                            <div class="form-group" style="grid-column: 1 / -1;">
-                                <label for="modal-${key}">${key}</label>
-                                <textarea id="modal-${key}" ${!isEditable ? 'readonly' : ''}>${value}</textarea>
-                            </div>
-                        `;
-                    } else {
-                        formHTML += `
-                            <div class="form-group">
-                                <label for="modal-${key}">${key}</label>
-                                <input type="text" id="modal-${key}" 
-                                       value="${String(value).replace(/"/g, '&quot;')}" 
-                                       ${!isEditable ? 'readonly' : ''} />
-                            </div>
-                        `;
-                    }
-                });
-                formHTML += '</div>';
-                modalBody.innerHTML = formHTML;
-                
-                modalFooter.innerHTML = `
-                    <button onclick="saveModalData()" class="btn-success">💾 Save</button>
-                    <button onclick="closeModal()" class="btn-danger">Cancel</button>
-                `;
-            }
-            
-            modal.style.display = 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('modal').style.display = 'none';
-            isUserInteracting = false; // Allow refresh again
-        }
-
-        // UPDATED saveModalData function with user tracking
-        function saveModalData() {
-            const modal = document.getElementById('modal');
-            const inputs = modal.querySelectorAll('input, textarea');
-            const newData = {};
-            let hasUnauthorizedEdit = false;
-            
-            // Get original item for comparison
-            const originalItem = editingIndex >= 0 ? jsonData[editingIndex] : {};
-            
-            // Check for unauthorized edits if not admin
-            if (!isAdmin) {
-                inputs.forEach(input => {
-                    const key = input.id.replace('modal-', '');
-                    if (!CONFIG.editableByAll.includes(key) && 
-                        String(input.value) !== String(originalItem[key])) {
-                        hasUnauthorizedEdit = true;
-                    }
-                });
-            }
-            
-            if (hasUnauthorizedEdit) {
-                showNotification('Only admins can edit these fields', 'error');
-                return;
-            }
-            
-            // Proceed with save
-            inputs.forEach(input => {
-                const key = input.id.replace('modal-', '');
-                newData[key] = input.value;
-            });
-            
-            // ADD EDIT TRACKING
-            newData['Edited_By'] = currentUser;
-            newData['Last_Edit_Date'] = new Date().toLocaleString();
-            
-            // If it's a new item, also track creation
-            if (currentViewMode === 'add') {
-                newData['Created_By'] = currentUser;
-                newData['Created_Date'] = new Date().toLocaleString();
-            } else {
-                // Preserve original creation info if editing
-                if (originalItem['Created_By']) {
-                    newData['Created_By'] = originalItem['Created_By'];
-                }
-                if (originalItem['Created_Date']) {
-                    newData['Created_Date'] = originalItem['Created_Date'];
-                }
-            }
-            
-            if (currentViewMode === 'edit') {
-                jsonData[editingIndex] = newData;
-                showNotification(`Item updated by ${currentUser}!`);
-            } else if (currentViewMode === 'add') {
-                jsonData.push(newData);
-                showNotification(`Item added by ${currentUser}!`);
-            }
-            
-            applySearchAndFilters();
-            renderDashboard();
-            closeModal();
-            
-            if (CONFIG.autoSave) {
-                saveToFile();
-            }
-        }
-
-        function exportData() {
-            if (jsonData.length === 0) {
-                showNotification('No data to export!', 'error');
-                return;
-            }
-            
-            const dataStr = JSON.stringify(jsonData, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-            const exportFileDefaultName = `sea_master_data_${timestamp}.json`;
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-            
-            showNotification('Data exported successfully!');
-        }
-
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            
-            if (type === 'error') {
-                notification.style.background = 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)';
-            } else if (type === 'info') {
-                notification.style.background = 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
-            } else {
-                notification.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
-            }
-            
-            notification.style.transform = 'translateX(0)';
-            
-            setTimeout(() => {
-                notification.style.transform = 'translateX(400px)';
-            }, 3000);
-        }
-
-        // Auto-save functionality
-        async function saveToFile() {
-            try {
-                if (CONFIG.saveEndpoint) {
-                    const response = await fetch(CONFIG.saveEndpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(jsonData, null, 2)
-                    });
-                    
-                    if (response.ok) {
-                        console.log('Changes saved to file');
-                    } else {
-                        throw new Error('Save failed');
-                    }
-                }
-            } catch (error) {
-                console.error('Auto-save error:', error);
-            }
-        }
-
-        // UPDATED window.onload to ask for user name
-        window.onload = async function() {
-            // Check admin status first
-            checkAdminStatus();
-            
-            // GET USER NAME - This will prompt for name
-            getUserIdentifier();
-            
-            // Show welcome message
-            showNotification(`Welcome ${currentUser}! Your edits will be tracked.`);
-            
-            // Load saved filters and search
-            loadFiltersFromStorage();
-            
-            // Load data
-            await loadDataFromPath();
-            
-            // Start auto-reload
-            startAutoReload();
-        };
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('modal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-
-        // Stop auto-reload when page is hidden, restart when visible
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                stopAutoReload();
-            } else {
-                startAutoReload();
-                loadDataFromPath(); // Immediate refresh when returning
-            }
-        });
-
-        // Track when user leaves input fields
-        document.addEventListener('focusout', function(e) {
-            if (e.target.matches('input, textarea, select')) {
-                setTimeout(() => {
-                    isUserInteracting = false;
-                }, 500);
-            }
-        });
-
-        // Track when user enters input fields
-        document.addEventListener('focusin', function(e) {
-            if (e.target.matches('input, textarea, select')) {
-                isUserInteracting = true;
-            }
-        });
-    </script>
-</body>
-</html>
-            
